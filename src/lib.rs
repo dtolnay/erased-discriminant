@@ -1,3 +1,28 @@
+//! This crate provides a `Discriminant` type that behaves like
+//! `core::mem::Discriminant<T>` but without the generic type parameter `T`.
+//! With this, we can build collections such as HashSet that contain
+//! discriminants from a mixture of different enum types.
+//!
+//! ```
+//! use erased_discriminant::Discriminant;
+//! use std::collections::HashSet;
+//!
+//! enum Enum {
+//!     A(i32),
+//!     B,
+//! }
+//!
+//! enum DifferentEnum {
+//!     A,
+//! }
+//!
+//! let mut set = HashSet::new();
+//! set.insert(Discriminant::of(&Enum::A(99)));
+//! set.insert(Discriminant::of(&Enum::B));
+//! set.insert(Discriminant::of(&DifferentEnum::A));
+//! assert_eq!(set.len(), 3);
+//! ```
+
 #![no_std]
 #![deny(unsafe_op_in_unsafe_fn)]
 #![allow(clippy::missing_safety_doc)]
