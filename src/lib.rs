@@ -31,7 +31,7 @@
 
 #![no_std]
 #![deny(unsafe_op_in_unsafe_fn)]
-#![allow(clippy::missing_safety_doc)]
+#![allow(clippy::doc_markdown, clippy::missing_safety_doc)]
 
 extern crate alloc;
 
