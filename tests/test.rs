@@ -41,4 +41,6 @@ fn test_hashset() {
     set.insert(Discriminant::of(&Enum::B));
     set.insert(Discriminant::of(&DifferentEnum::A));
     assert_eq!(set.len(), 3);
+
+    assert_eq!(set, set.clone());
 }
