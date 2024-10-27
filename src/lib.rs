@@ -1,12 +1,16 @@
+#![no_std]
 #![deny(unsafe_op_in_unsafe_fn)]
 #![allow(clippy::missing_safety_doc)]
 
-use std::any::TypeId;
-use std::fmt::{self, Debug};
-use std::hash::{Hash, Hasher};
-use std::mem::{self, MaybeUninit};
+extern crate alloc;
 
-/// A type-erased version of `std::mem::Discriminant<T>`.
+use alloc::boxed::Box;
+use core::any::TypeId;
+use core::fmt::{self, Debug};
+use core::hash::{Hash, Hasher};
+use core::mem::{self, MaybeUninit};
+
+/// A type-erased version of `core::mem::Discriminant<T>`.
 pub struct Discriminant {
     data: MaybeUninit<*mut ()>,
     vtable: &'static DiscriminantVTable,
@@ -19,7 +23,7 @@ impl Discriminant {
             let mut data = MaybeUninit::<*mut ()>::uninit();
             unsafe {
                 data.as_mut_ptr()
-                    .cast::<std::mem::Discriminant<T>>()
+                    .cast::<core::mem::Discriminant<T>>()
                     .write(discriminant);
             }
             data
@@ -34,14 +38,14 @@ impl Discriminant {
                 clone: discriminant_clone::<T>,
                 debug: discriminant_debug::<T>,
                 drop: discriminant_drop::<T>,
-                type_id: typeid::of::<std::mem::Discriminant<T>>,
+                type_id: typeid::of::<core::mem::Discriminant<T>>,
             },
         }
     }
 }
 
 fn small_discriminant<T>() -> bool {
-    mem::size_of::<std::mem::Discriminant<T>>() <= mem::size_of::<*const ()>()
+    mem::size_of::<core::mem::Discriminant<T>>() <= mem::size_of::<*const ()>()
 }
 
 struct DiscriminantVTable {
@@ -53,23 +57,23 @@ struct DiscriminantVTable {
     type_id: fn() -> TypeId,
 }
 
-unsafe fn as_ref<T>(this: &Discriminant) -> &std::mem::Discriminant<T> {
+unsafe fn as_ref<T>(this: &Discriminant) -> &core::mem::Discriminant<T> {
     unsafe {
         &*if small_discriminant::<T>() {
-            this.data.as_ptr().cast::<std::mem::Discriminant<T>>()
+            this.data.as_ptr().cast::<core::mem::Discriminant<T>>()
         } else {
-            this.data.assume_init().cast::<std::mem::Discriminant<T>>()
+            this.data.assume_init().cast::<core::mem::Discriminant<T>>()
         }
     }
 }
 
 unsafe fn discriminant_eq<T>(this: &Discriminant, other: &Discriminant) -> bool {
-    (other.vtable.type_id)() == typeid::of::<std::mem::Discriminant<T>>()
+    (other.vtable.type_id)() == typeid::of::<core::mem::Discriminant<T>>()
         && unsafe { as_ref::<T>(this) } == unsafe { as_ref::<T>(other) }
 }
 
 unsafe fn discriminant_hash<T>(this: &Discriminant, mut hasher: &mut dyn Hasher) {
-    typeid::of::<std::mem::Discriminant<T>>().hash(&mut hasher);
+    typeid::of::<core::mem::Discriminant<T>>().hash(&mut hasher);
     unsafe { as_ref::<T>(this) }.hash(&mut hasher);
 }
 
@@ -80,7 +84,7 @@ unsafe fn discriminant_clone<T>(this: &Discriminant) -> Discriminant {
             vtable: this.vtable,
         }
     } else {
-        let discriminant = unsafe { *this.data.assume_init().cast::<std::mem::Discriminant<T>>() };
+        let discriminant = unsafe { *this.data.assume_init().cast::<core::mem::Discriminant<T>>() };
         Discriminant {
             data: MaybeUninit::new(Box::into_raw(Box::new(discriminant)).cast::<()>()),
             vtable: this.vtable,
@@ -98,7 +102,7 @@ unsafe fn discriminant_debug<T>(
 unsafe fn discriminant_drop<T>(this: &mut Discriminant) {
     if !small_discriminant::<T>() {
         let _ =
-            unsafe { Box::from_raw(this.data.assume_init().cast::<std::mem::Discriminant<T>>()) };
+            unsafe { Box::from_raw(this.data.assume_init().cast::<core::mem::Discriminant<T>>()) };
     }
 }
 
