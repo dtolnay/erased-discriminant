@@ -2,6 +2,7 @@
 name = "erased-discriminant"
 version = "0.0.0"
 authors = ["David Tolnay <dtolnay@gmail.com>"]
+categories = ["no-std"]
 description = "Type-erased version of core::mem::Discriminant<T>"
 documentation = "https://docs.rs/erased-discriminant"
 edition = "2021"
