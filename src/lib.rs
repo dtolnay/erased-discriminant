@@ -1,3 +1,4 @@
+#![deny(unsafe_op_in_unsafe_fn)]
 #![allow(clippy::missing_safety_doc)]
 
 use std::any::TypeId;
@@ -51,33 +52,36 @@ struct DiscriminantVTable {
 }
 
 unsafe fn as_ref<T>(this: &Discriminant) -> &std::mem::Discriminant<T> {
-    &*if small_discriminant::<T>() {
-        this.data.as_ptr().cast()
-    } else {
-        this.data.assume_init().cast()
+    unsafe {
+        &*if small_discriminant::<T>() {
+            this.data.as_ptr().cast()
+        } else {
+            this.data.assume_init().cast()
+        }
     }
 }
 
 unsafe fn discriminant_eq<T>(this: &Discriminant, other: &Discriminant) -> bool {
     (other.vtable.type_id)() == typeid::of::<std::mem::Discriminant<T>>()
-        && as_ref::<T>(this) == as_ref::<T>(other)
+        && unsafe { as_ref::<T>(this) } == unsafe { as_ref::<T>(other) }
 }
 
 unsafe fn discriminant_hash<T>(this: &Discriminant, mut hasher: &mut dyn Hasher) {
     typeid::of::<std::mem::Discriminant<T>>().hash(&mut hasher);
-    as_ref::<T>(this).hash(&mut hasher);
+    unsafe { as_ref::<T>(this) }.hash(&mut hasher);
 }
 
 unsafe fn discriminant_debug<T>(
     this: &Discriminant,
     formatter: &mut fmt::Formatter,
 ) -> fmt::Result {
-    Debug::fmt(as_ref::<T>(this), formatter)
+    Debug::fmt(unsafe { as_ref::<T>(this) }, formatter)
 }
 
 unsafe fn discriminant_drop<T>(this: &mut Discriminant) {
     if !small_discriminant::<T>() {
-        let _ = Box::from_raw(this.data.assume_init().cast::<std::mem::Discriminant<T>>());
+        let _ =
+            unsafe { Box::from_raw(this.data.assume_init().cast::<std::mem::Discriminant<T>>()) };
     }
 }
 
