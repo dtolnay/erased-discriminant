@@ -3,51 +3,81 @@
 use std::any::TypeId;
 use std::fmt::{self, Debug};
 use std::hash::{Hash, Hasher};
-use std::mem;
-use std::ptr;
+use std::mem::{self, MaybeUninit};
 
 /// A type-erased version of `std::mem::Discriminant<T>`.
 pub struct Discriminant {
-    erased: Box<dyn ErasedDiscriminant>,
+    data: MaybeUninit<*mut ()>,
+    vtable: &'static DiscriminantVTable,
 }
 
 impl Discriminant {
     pub fn of<T>(value: &T) -> Self {
-        let erased_nonstatic = Box::new(mem::discriminant(value)) as Box<dyn ErasedDiscriminant>;
-        // SAFETY: while the enum type T may contain borrows, the discriminant
-        // type Discriminant<T> definitely does not, despite T's type appearing
-        // in Discriminant<T>'s type. All of the ErasedDiscriminant APIs (eq,
-        // hash, fmt) operate correctly on Discriminant<T> after T's lifetime is
-        // expired.
-        let erased = unsafe {
-            mem::transmute::<Box<dyn ErasedDiscriminant>, Box<dyn ErasedDiscriminant>>(
-                erased_nonstatic,
-            )
+        let discriminant = mem::discriminant(value);
+        let data = if small_discriminant::<T>() {
+            let mut data = MaybeUninit::<*mut ()>::uninit();
+            unsafe {
+                data.as_mut_ptr()
+                    .cast::<std::mem::Discriminant<T>>()
+                    .write(discriminant);
+            }
+            data
+        } else {
+            MaybeUninit::new(Box::into_raw(Box::new(discriminant)).cast())
         };
-        Discriminant { erased }
+        Discriminant {
+            data,
+            vtable: &DiscriminantVTable {
+                eq: discriminant_eq::<T>,
+                hash: discriminant_hash::<T>,
+                debug: discriminant_debug::<T>,
+                drop: discriminant_drop::<T>,
+                type_id: typeid::of::<std::mem::Discriminant<T>>,
+            },
+        }
     }
 }
 
-trait ErasedDiscriminant: Debug + NonStaticAny {
-    fn erased_eq(&self, other: &dyn ErasedDiscriminant) -> bool;
-    fn erased_hash(&self, hasher: &mut dyn Hasher);
+fn small_discriminant<T>() -> bool {
+    mem::size_of::<std::mem::Discriminant<T>>() <= mem::size_of::<*const ()>()
 }
 
-impl<T> ErasedDiscriminant for std::mem::Discriminant<T> {
-    fn erased_eq(&self, other: &dyn ErasedDiscriminant) -> bool {
-        other.type_id() == typeid::of::<std::mem::Discriminant<T>>()
-            && PartialEq::eq(
-                self,
-                // SAFETY: self and other have the same type modulo lifetimes,
-                // and std::mem::Discriminant<T>'s PartialEq is not sensitive to
-                // lifetimes.
-                unsafe { &*ptr::from_ref(other).cast::<std::mem::Discriminant<T>>() },
-            )
-    }
+struct DiscriminantVTable {
+    eq: unsafe fn(this: &Discriminant, other: &Discriminant) -> bool,
+    hash: unsafe fn(this: &Discriminant, hasher: &mut dyn Hasher),
+    debug: unsafe fn(this: &Discriminant, formatter: &mut fmt::Formatter) -> fmt::Result,
+    drop: unsafe fn(this: &mut Discriminant),
+    type_id: fn() -> TypeId,
+}
 
-    fn erased_hash(&self, mut hasher: &mut dyn Hasher) {
-        typeid::of::<Self>().hash(&mut hasher);
-        self.hash(&mut hasher);
+unsafe fn as_ref<T>(this: &Discriminant) -> &std::mem::Discriminant<T> {
+    &*if small_discriminant::<T>() {
+        this.data.as_ptr().cast()
+    } else {
+        this.data.assume_init().cast()
+    }
+}
+
+unsafe fn discriminant_eq<T>(this: &Discriminant, other: &Discriminant) -> bool {
+    (other.vtable.type_id)() == typeid::of::<std::mem::Discriminant<T>>()
+        && as_ref::<T>(this) == as_ref::<T>(other)
+}
+
+unsafe fn discriminant_hash<T>(this: &Discriminant, mut hasher: &mut dyn Hasher) {
+    typeid::of::<std::mem::Discriminant<T>>().hash(&mut hasher);
+    as_ref::<T>(this).hash(&mut hasher);
+}
+
+unsafe fn discriminant_debug<T>(
+    this: &Discriminant,
+    formatter: &mut fmt::Formatter,
+) -> fmt::Result {
+    Debug::fmt(as_ref::<T>(this), formatter)
+}
+
+unsafe fn discriminant_drop<T>(this: &mut Discriminant) {
+    if !small_discriminant::<T>() {
+        let _ = Box::from_raw(this.data.assume_init().cast::<std::mem::Discriminant<T>>());
     }
 }
 
@@ -55,31 +85,24 @@ impl Eq for Discriminant {}
 
 impl PartialEq for Discriminant {
     fn eq(&self, other: &Self) -> bool {
-        self.erased.erased_eq(&*other.erased)
+        unsafe { (self.vtable.eq)(self, other) }
     }
 }
 
 impl Hash for Discriminant {
     fn hash<H: Hasher>(&self, hasher: &mut H) {
-        self.erased.erased_hash(hasher);
+        unsafe { (self.vtable.hash)(self, hasher) };
     }
 }
 
 impl Debug for Discriminant {
     fn fmt(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
-        Debug::fmt(&self.erased, formatter)
+        unsafe { (self.vtable.debug)(self, formatter) }
     }
 }
 
-// Unsafe because unsafe code must be allowed to rely on `type_id` being
-// correctly implemented.
-unsafe trait NonStaticAny {
-    fn type_id(&self) -> TypeId;
-}
-
-// SAFETY: correct implementation of `type_id`.
-unsafe impl<T> NonStaticAny for T {
-    fn type_id(&self) -> TypeId {
-        typeid::of::<T>()
+impl Drop for Discriminant {
+    fn drop(&mut self) {
+        unsafe { (self.vtable.drop)(self) };
     }
 }
