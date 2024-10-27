@@ -10,3 +10,6 @@ repository = "https://github.com/dtolnay/erased-discriminant"
 
 [dependencies]
 typeid = "1"
+
+[package.metadata.docs.rs]
+targets = ["x86_64-unknown-linux-gnu"]
