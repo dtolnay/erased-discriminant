@@ -24,7 +24,7 @@ impl Discriminant {
             }
             data
         } else {
-            MaybeUninit::new(Box::into_raw(Box::new(discriminant)).cast())
+            MaybeUninit::new(Box::into_raw(Box::new(discriminant)).cast::<()>())
         };
         Discriminant {
             data,
@@ -56,9 +56,9 @@ struct DiscriminantVTable {
 unsafe fn as_ref<T>(this: &Discriminant) -> &std::mem::Discriminant<T> {
     unsafe {
         &*if small_discriminant::<T>() {
-            this.data.as_ptr().cast()
+            this.data.as_ptr().cast::<std::mem::Discriminant<T>>()
         } else {
-            this.data.assume_init().cast()
+            this.data.assume_init().cast::<std::mem::Discriminant<T>>()
         }
     }
 }
@@ -82,7 +82,7 @@ unsafe fn discriminant_clone<T>(this: &Discriminant) -> Discriminant {
     } else {
         let discriminant = unsafe { *this.data.assume_init().cast::<std::mem::Discriminant<T>>() };
         Discriminant {
-            data: MaybeUninit::new(Box::into_raw(Box::new(discriminant)).cast()),
+            data: MaybeUninit::new(Box::into_raw(Box::new(discriminant)).cast::<()>()),
             vtable: this.vtable,
         }
     }
