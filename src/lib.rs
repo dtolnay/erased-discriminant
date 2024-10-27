@@ -31,6 +31,7 @@ impl Discriminant {
             vtable: &DiscriminantVTable {
                 eq: discriminant_eq::<T>,
                 hash: discriminant_hash::<T>,
+                clone: discriminant_clone::<T>,
                 debug: discriminant_debug::<T>,
                 drop: discriminant_drop::<T>,
                 type_id: typeid::of::<std::mem::Discriminant<T>>,
@@ -46,6 +47,7 @@ fn small_discriminant<T>() -> bool {
 struct DiscriminantVTable {
     eq: unsafe fn(this: &Discriminant, other: &Discriminant) -> bool,
     hash: unsafe fn(this: &Discriminant, hasher: &mut dyn Hasher),
+    clone: unsafe fn(this: &Discriminant) -> Discriminant,
     debug: unsafe fn(this: &Discriminant, formatter: &mut fmt::Formatter) -> fmt::Result,
     drop: unsafe fn(this: &mut Discriminant),
     type_id: fn() -> TypeId,
@@ -69,6 +71,21 @@ unsafe fn discriminant_eq<T>(this: &Discriminant, other: &Discriminant) -> bool 
 unsafe fn discriminant_hash<T>(this: &Discriminant, mut hasher: &mut dyn Hasher) {
     typeid::of::<std::mem::Discriminant<T>>().hash(&mut hasher);
     unsafe { as_ref::<T>(this) }.hash(&mut hasher);
+}
+
+unsafe fn discriminant_clone<T>(this: &Discriminant) -> Discriminant {
+    if small_discriminant::<T>() {
+        Discriminant {
+            data: this.data,
+            vtable: this.vtable,
+        }
+    } else {
+        let discriminant = unsafe { *this.data.assume_init().cast::<std::mem::Discriminant<T>>() };
+        Discriminant {
+            data: MaybeUninit::new(Box::into_raw(Box::new(discriminant)).cast()),
+            vtable: this.vtable,
+        }
+    }
 }
 
 unsafe fn discriminant_debug<T>(
@@ -96,6 +113,12 @@ impl PartialEq for Discriminant {
 impl Hash for Discriminant {
     fn hash<H: Hasher>(&self, hasher: &mut H) {
         unsafe { (self.vtable.hash)(self, hasher) };
+    }
+}
+
+impl Clone for Discriminant {
+    fn clone(&self) -> Self {
+        unsafe { (self.vtable.clone)(self) }
     }
 }
 
