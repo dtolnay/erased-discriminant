@@ -8,6 +8,7 @@ documentation = "https://docs.rs/erased-discriminant"
 edition = "2021"
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/dtolnay/erased-discriminant"
+rust-version = "1.56"
 
 [dependencies]
 typeid = "1"
