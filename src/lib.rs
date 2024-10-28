@@ -76,7 +76,7 @@ impl Discriminant {
     }
 }
 
-fn small_discriminant<T>() -> bool {
+const fn small_discriminant<T>() -> bool {
     mem::size_of::<core::mem::Discriminant<T>>() <= mem::size_of::<*const ()>()
 }
 
