@@ -89,7 +89,7 @@ struct DiscriminantVTable {
     type_id: fn() -> TypeId,
 }
 
-unsafe fn as_ref<T>(this: &Discriminant) -> &core::mem::Discriminant<T> {
+const unsafe fn as_ref<T>(this: &Discriminant) -> &core::mem::Discriminant<T> {
     unsafe {
         &*if small_discriminant::<T>() {
             this.data.as_ptr().cast::<core::mem::Discriminant<T>>()
