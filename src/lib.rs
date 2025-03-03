@@ -30,7 +30,7 @@
 //! ```
 
 #![no_std]
-#![doc(html_root_url = "https://docs.rs/erased-discriminant/1.0.0")]
+#![doc(html_root_url = "https://docs.rs/erased-discriminant/1.0.1")]
 #![deny(unsafe_op_in_unsafe_fn)]
 #![allow(clippy::doc_markdown, clippy::missing_safety_doc)]
 
